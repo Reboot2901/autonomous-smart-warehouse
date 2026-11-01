@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Warehouse Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/dashboard/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <!-- ============================== HEADER ============================== -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M7 21v-8h10v8"/><path d="M7 17h10"/></svg>
+      </div>
+      <div>
+        <h1>Smart Warehouse Monitor</h1>
+        <p>Autonomous AI &amp; IoT Monitoring · ESP32 + Random Forest</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="meta"><span class="meta-label">Last data</span><span id="lastSeen">—</span></div>
+      <div class="meta"><span class="meta-label">Logs</span><span id="totalLogs">0</span></div>
+      <div id="connPill" class="pill pill-off"><span class="dot"></span><span id="connText">Connecting…</span></div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+  </header>
+
+  <div id="criticalBanner" class="banner hidden">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+    <span id="criticalText"></span>
+  </div>
+
+  <main class="container">
+    <!-- ============================ KPI TILES ============================ -->
+    <section class="kpis">
+      <div class="kpi" id="kpi-temp">
+        <div class="kpi-head"><span>Temperature</span><span class="kpi-icon">🌡️</span></div>
+        <div class="kpi-value"><span id="vTemp">--</span><small>°C</small></div>
+        <div class="kpi-foot"><span class="chip" id="sTemp">—</span><span class="hint">DHT11 · GPIO 15</span></div>
+      </div>
+      <div class="kpi" id="kpi-hum">
+        <div class="kpi-head"><span>Humidity</span><span class="kpi-icon">💧</span></div>
+        <div class="kpi-value"><span id="vHum">--</span><small>%</small></div>
+        <div class="kpi-foot"><span class="chip" id="sHum">—</span><span class="hint">DHT11 · GPIO 15</span></div>
+      </div>
+      <div class="kpi" id="kpi-dist">
+        <div class="kpi-head"><span>Bin Distance</span><span class="kpi-icon">📏</span></div>
+        <div class="kpi-value"><span id="vDist">--</span><small>cm</small></div>
+        <div class="kpi-foot"><span class="chip" id="sDist">—</span><span class="hint" id="vOcc">Occupancy --%</span></div>
+      </div>
+      <div class="kpi" id="kpi-gas">
+        <div class="kpi-head"><span>Air Quality</span><span class="kpi-icon">🫧</span></div>
+        <div class="kpi-value"><span id="vGas">--</span><small>ADC</small></div>
+        <div class="kpi-foot"><span class="chip" id="sGas">—</span><span class="hint">MQ-2 · GPIO 34</span></div>
+      </div>
+      <div class="kpi" id="kpi-light">
+        <div class="kpi-head"><span>Ambient Light</span><span class="kpi-icon">💡</span></div>
+        <div class="kpi-value"><span id="vLight">--</span><small>%</small></div>
+        <div class="kpi-foot"><span class="chip" id="sLight">—</span><span class="hint">LDR · GPIO 36</span></div>
+      </div>
+      <div class="kpi" id="kpi-alerts">
+        <div class="kpi-head"><span>Alerts (10 min)</span><span class="kpi-icon">🔔</span></div>
+        <div class="kpi-value"><span id="vAlerts">--</span><small>active</small></div>
+        <div class="kpi-foot"><span class="chip" id="sAlerts">—</span><span class="hint">Buzzer GPIO 13 · LED 26</span></div>
+      </div>
+    </section>
+
+    <!-- ============================ INVENTORY ============================ -->
+    <section class="section-head">
+      <h2>Inventory &amp; Demand Forecast</h2>
+      <label class="toggle"><input type="checkbox" id="promoToggle" /> <span>Promotion active</span></label>
+    </section>
+    <section class="inventory" id="inventory">
+      <div class="card skeleton">Loading inventory…</div>
+    </section>
+
+    <!-- ============================= CHARTS ============================== -->
+    <section class="grid-3">
+      <div class="card">
+        <div class="card-head"><h3>Environment</h3><span class="sub">Temperature &amp; humidity</span></div>
+        <div class="chart-box"><canvas id="chartEnv"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Occupancy &amp; Gas</h3><span class="sub">HC-SR04 distance · MQ-2 level</span></div>
+        <div class="chart-box"><canvas id="chartOcc"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Ambient Light</h3><span class="sub">LDR percentage</span></div>
+        <div class="chart-box"><canvas id="chartLight"></canvas></div>
+      </div>
+    </section>
+
+    <!-- =========================== PREDICTION ============================ -->
+    <section class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <h3>Demand Prediction</h3>
+          <span class="sub">POST /api/predict</span>
+        </div>
+        <form id="predictForm" class="form">
+          <label>Product
+            <select id="fProduct">
+              <option value="P001">P001 · Rice</option>
+              <option value="P002">P002 · Milk</option>
+              <option value="P003">P003 · Beans</option>
+            </select>
+          </label>
+          <label>Orders (prev. day)<input type="number" id="f_orders" min="0" max="5" value="2" /></label>
+          <label>Avg temp (°C)<input type="number" id="f_avg_temp_c" step="0.1" value="25" /></label>
+          <label>Occupancy (%)<input type="number" id="f_occupancy_pct" step="0.1" value="40" /></label>
+          <label>Light ADC<input type="number" id="f_ambient_light_adc" min="0" max="4095" value="2600" /></label>
+          <label>Promotion
+            <select id="f_promo_flag"><option value="0">No</option><option value="1">Yes</option></select>
+          </label>
+          <label>Day of week
+            <select id="f_day_of_week">
+              <option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option>
+              <option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option><option value="6">Sunday</option>
+            </select>
+          </label>
+          <label>Stock on hand<input type="number" id="f_stock_on_hand" min="0" value="20" /></label>
+          <label>Reorder point<input type="number" id="f_reorder_point" min="0" value="8" /></label>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" id="btnLive">Fill from live data</button>
+            <button type="submit" class="btn primary">Predict demand</button>
+          </div>
+        </form>
+        <div class="result" id="predResult">
+          <div><span class="r-label">Predicted demand (24 h)</span><span class="r-value" id="rDemand">—</span></div>
+          <div><span class="r-label">Restock recommendation</span><span class="r-value" id="rRestock">—</span></div>
+          <div><span class="r-label">Response time</span><span class="r-value small" id="rLatency">—</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Prediction Trend</h3><span class="sub">Recent model outputs per product</span></div>
+        <div class="chart-box tall"><canvas id="chartPred"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ========================== LOGS & MODEL =========================== -->
+    <section class="grid-3 logs">
+      <div class="card span-2">
+        <div class="card-head"><h3>Alert Log</h3><span class="sub" id="alertCount">0 alerts</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Level</th><th>Type</th><th>Message</th></tr></thead>
+            <tbody id="alertBody"><tr><td colspan="4" class="empty">No alerts yet</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>RFID &amp; Button Events</h3><span class="sub">RC522 · GPIO 5</span></div>
+        <ul class="events" id="eventList"><li class="empty">No events yet</li></ul>
+      </div>
+    </section>
+
+    <section class="grid-2">
+      <div class="card">
+        <div class="card-head"><h3>ML Model</h3><span class="sub">Random Forest · 250 trees · depth 10</span></div>
+        <div class="metrics">
+          <div class="metric"><span>R² score</span><b id="mR2">—</b><i>target &gt; 0.90</i></div>
+          <div class="metric"><span>MAE</span><b id="mMAE">—</b><i>target &lt; 2 units</i></div>
+          <div class="metric"><span>RMSE</span><b id="mRMSE">—</b><i>target &lt; 2.5 units</i></div>
+          <div class="metric"><span>Within ±2</span><b id="mWithin">—</b><i>test set</i></div>
+        </div>
+        <p class="footnote" id="mTrained">—</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Feature Importance</h3><span class="sub">What drives demand</span></div>
+        <div class="chart-box"><canvas id="chartFI"></canvas></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Autonomous Smart Warehouse Monitoring System Using AI &amp; IoT · Sathyabama Institute of Science and Technology · Arya Vamsi Balaji
+  </footer>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/dashboard/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+{
+  "r2": 0.946,
+  "mae": 0.6852,
+  "rmse": 0.8653,
+  "within_2_units_pct": 97.78,
+  "n_train": 270,
+  "n_test": 90,
+  "features": [
+    "orders",
+    "avg_temp_c",
+    "occupancy_pct",
+    "ambient_light_adc",
+    "promo_flag",
+    "day_of_week",
+    "stock_on_hand",
+    "reorder_point"
+  ],
+  "feature_importance": {
+    "orders": 0.0764,
+    "avg_temp_c": 0.0778,
+    "occupancy_pct": 0.0992,
+    "ambient_light_adc": 0.0106,
+    "promo_flag": 0.1208,
+    "day_of_week": 0.0715,
+    "stock_on_hand": 0.0088,
+    "reorder_point": 0.535
+  },
+  "params": {
+    "n_estimators": 250,
+    "max_depth": 10,
+    "min_samples_split": 5,
+    "min_samples_leaf": 2
+  },
+  "trained_at": "2026-10-14T07:26:59.000269+00:00"
+}
